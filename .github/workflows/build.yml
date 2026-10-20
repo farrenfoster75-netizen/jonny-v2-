@@ -1,0 +1,43 @@
+name: Build
+on: [push, workflow_dispatch]
+jobs:
+  mod:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: {distribution: temurin, java-version: 8}
+      - run: |
+          Z=$(ls JonnyClient-v*.zip | sort -V | tail -1)
+          unzip -q "$Z"
+          wget -q https://services.gradle.org/distributions/gradle-2.14.1-bin.zip
+          unzip -q gradle-2.14.1-bin.zip
+          cd JonnyClient-Full/mod
+          ../../gradle-2.14.1/bin/gradle setupCIWorkspace build --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mod-jar
+          path: JonnyClient-Full/mod/build/libs/JonnyClient-1.0.jar
+  launcher:
+    needs: mod
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 20}
+      - run: |
+          $z = (Get-ChildItem JonnyClient-v*.zip | Sort-Object { [int]($_.BaseName -replace '\D','') } | Select-Object -Last 1).Name
+          Expand-Archive $z -DestinationPath .
+        shell: pwsh
+      - uses: actions/download-artifact@v4
+        with:
+          name: mod-jar
+          path: JonnyClient-Full/launcher/mod
+      - run: |
+          cd JonnyClient-Full/launcher
+          npm install
+          npx electron-builder --win portable
+      - uses: actions/upload-artifact@v4
+        with:
+          name: JonnyClient
+          path: JonnyClient-Full/launcher/dist/JonnyClient.exe
